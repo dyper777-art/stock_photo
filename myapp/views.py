@@ -1,69 +1,60 @@
 import os
-from django.shortcuts import render, redirect, get_object_or_404
+from datetime import timedelta
+
+from django.conf import settings
+from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
-from django.contrib.auth.models import User
-from django.utils import timezone
-from django.core.mail import send_mail
-from django.utils.crypto import get_random_string
-from django.http import HttpResponse, JsonResponse, FileResponse, Http404
-from datetime import timedelta
-from django.conf import settings
-from django.contrib.auth.views import PasswordResetView
-
-from django.contrib.auth.tokens import default_token_generator
-from django.urls import reverse
-from django.utils.http import urlsafe_base64_encode
-from django.utils.encoding import force_bytes
-from django.utils.http import urlsafe_base64_decode
 from django.contrib.auth.hashers import make_password
-
-from .models import Product, UserSubscription, UserDownloadLog, SubscriptionPlan
+from django.contrib.auth.models import User
+from django.contrib.auth.tokens import default_token_generator
+from django.core.mail import send_mail
+from django.http import FileResponse, HttpResponse
+from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
+from django.utils import timezone
+from django.utils.crypto import get_random_string
+from django.utils.encoding import force_bytes
+from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
+from django.template import TemplateDoesNotExist
 
 import resend
-
 import stripe
 
+from .models import Product, UserSubscription, UserDownloadLog, SubscriptionPlan
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
 
 # -------------------------------
-# Stripe Checkout
+# Stripe Helpers
 # -------------------------------
 
 def can_subscribe(user, plan_id):
+    subscription = getattr(user, 'usersubscription', None)
+    if not subscription:
+        return True  # No subscription yet
 
-    if user.subscription.plan_id != plan_id:
-        return True
-
-    try:
-        subscription = user.subscription
-    except UserSubscription.DoesNotExist:
-        return True  # No subscription exists, allowed
-
-    # If subscription is active
     today = timezone.now().date()
     if subscription.start_date <= today <= subscription.end_date:
-        return False  # Already has an active subscription
+        return False  # Active subscription exists
+
+    if subscription.plan_id == plan_id:
+        return False  # Already on this plan
 
     return True
 
 
 @login_required
 def create_checkout_session(request, plan_id):
-
     if not can_subscribe(request.user, plan_id):
         return HttpResponse("You already have an active subscription this month.", status=400)
-
-
 
     plan = get_object_or_404(SubscriptionPlan, id=plan_id)
 
     if not plan.stripe_price_id:
-        return redirect('subscription_page')  # your subscription selection page
+        return redirect('subscription_view')
 
-    success_url = request.build_absolute_uri('/success/')+'?session_id={CHECKOUT_SESSION_ID}'
-
+    success_url = request.build_absolute_uri('/success/') + '?session_id={CHECKOUT_SESSION_ID}'
     cancel_url = request.build_absolute_uri('/cancel/')
 
     session = stripe.checkout.Session.create(
@@ -81,7 +72,6 @@ def create_checkout_session(request, plan_id):
     return redirect(session.url)
 
 
-
 @login_required
 def subscription_success(request):
     session_id = request.GET.get('session_id')
@@ -95,32 +85,27 @@ def subscription_success(request):
 
     stripe_sub_id = session.get("subscription")
     customer_email = session.get("customer_email")
-
     if not stripe_sub_id or not customer_email:
         return HttpResponse("Invalid session data", status=400)
 
-    # Find user
     try:
         user = User.objects.get(email=customer_email)
     except User.DoesNotExist:
         return HttpResponse("User not found", status=404)
 
-    # Fetch line items to get price
     try:
         line_items = stripe.checkout.Session.list_line_items(session_id, limit=1)
         price_id = line_items.data[0].price.id
     except (IndexError, KeyError):
         return HttpResponse("Could not retrieve line items", status=400)
 
-    # Get subscription plan
     try:
         plan = SubscriptionPlan.objects.get(stripe_price_id=price_id)
     except SubscriptionPlan.DoesNotExist:
         return HttpResponse("Plan not found", status=404)
 
-    # Update or create subscription
     start_date = timezone.now().date()
-    end_date = start_date + timedelta(days=30)  # Adjust duration as needed
+    end_date = start_date + timedelta(days=30)
     UserSubscription.objects.update_or_create(
         user=user,
         defaults={
@@ -140,7 +125,7 @@ def subscription_cancel(request):
 
 
 # -------------------------------
-# User Authentication
+# Authentication
 # -------------------------------
 
 def login_view(request):
@@ -166,7 +151,7 @@ def logout_view(request):
 # Registration + Activation
 # -------------------------------
 
-activation_codes = {}  # Demo purposes; replace with DB in production
+activation_codes = {}  # For demo; replace with DB in production
 
 def register_view(request):
     if request.method == 'POST':
@@ -184,25 +169,18 @@ def register_view(request):
         if User.objects.filter(email=email).exists():
             return render(request, 'register.html', {'error': 'Email exists'})
 
-        # Create inactive user
         user = User.objects.create_user(username=username, email=email, password=password, is_active=False)
 
-        # Assign Free plan
         try:
             free_plan = SubscriptionPlan.objects.get(name="Free")
-        except SubscriptionPlan.DoesNotExist:
-            free_plan = None  # optional: handle missing Free plan
-
-        if free_plan:
             start_date = timezone.now().date()
-            end_date = start_date + timedelta(days=365)  # Free plan duration (1 year)
+            end_date = start_date + timedelta(days=365)
             UserSubscription.objects.create(user=user, plan=free_plan, start_date=start_date, end_date=end_date)
+        except SubscriptionPlan.DoesNotExist:
+            pass  # optional: handle missing Free plan
 
-        # Generate activation code
         code = get_random_string(20)
         activation_codes[code] = user.username
-
-        
 
         activation_link = request.build_absolute_uri(f'/activate/{code}/')
         resend.api_key = settings.RESEND_API_KEY
@@ -212,22 +190,16 @@ def register_view(request):
                 "from": settings.MYHOSTEMAIL,
                 "to": [email],
                 "subject": "Activate your account",
-                "html": f"""
-                    <p>Hello {username},</p>
-                    <p>Click the link below to activate your account:</p>
-                    <p><a href="{activation_link}">Activate Account</a></p>
-                """
+                "html": f"<p>Hello {username},</p><p>Click here to activate: <a href='{activation_link}'>Activate</a></p>"
             })
         except Exception as e:
             print(f"Activation email failed: {e}")
             user.delete()
-            return render(request, 'register.html', {'error': 'Could not send activation email. Please try again.'})
-
+            return render(request, 'register.html', {'error': 'Could not send activation email.'})
 
         return render(request, 'check_email.html', {'email': email})
 
     return render(request, 'register.html')
-
 
 
 def activate_view(request, code):
@@ -254,25 +226,16 @@ def home(request):
 # Download API / File
 # -------------------------------
 
-from django.contrib import messages
-from django.shortcuts import redirect, get_object_or_404
-from django.http import FileResponse, Http404
-from django.contrib.auth.decorators import login_required
-from django.utils import timezone
-import os
-
 @login_required
 def download_product_api(request, product_id):
     user = request.user
     product = get_object_or_404(Product, pk=product_id)
     today = timezone.now().date()
 
-    # Get user's subscription
-    if not hasattr(user, 'usersubscription'):
+    subscription = getattr(user, 'usersubscription', None)
+    if not subscription:
         messages.error(request, "No subscription found.")
         return redirect('home')
-
-    subscription = user.usersubscription
 
     if not subscription.active():
         messages.error(request, "Subscription expired.")
@@ -282,39 +245,33 @@ def download_product_api(request, product_id):
     user_plan_name = subscription.plan.name
     product_plan_name = product.subscription_plan.name
 
-    # Check if product plan is higher than user's plan
     if plan_order.index(product_plan_name) > plan_order.index(user_plan_name):
         messages.error(request, "This product is not included in your subscription.")
         return redirect('home')
 
-    # Check daily download limit
     downloads_today = UserDownloadLog.objects.filter(user=user, date=today).count()
     if downloads_today >= subscription.plan.daily_limit:
         messages.error(request, "Daily download limit reached.")
         return redirect('home')
 
-    # Check if file exists
     if not product.file:
         messages.error(request, "File not found.")
         return redirect('home')
 
-    # Log the download
     UserDownloadLog.objects.create(user=user, product=product)
-
-    # Serve the file
     file_handle = product.file.open('rb')
     return FileResponse(file_handle, as_attachment=True, filename=os.path.basename(product.file.name))
 
 
 # -------------------------------
-# Subscription page (manual selection)
+# Subscription Page
 # -------------------------------
 
 @login_required
 def subscription_view(request):
     user = request.user
     plans = SubscriptionPlan.objects.all()
-    current_subscription = getattr(user, 'subscription', None)
+    current_subscription = getattr(user, 'usersubscription', None)
 
     if request.method == "POST":
         plan_id = request.POST.get('plan')
@@ -324,18 +281,19 @@ def subscription_view(request):
 
         UserSubscription.objects.update_or_create(
             user=user,
-            defaults={
-                "plan": plan,
-                "start_date": start_date,
-                "end_date": end_date
-            }
+            defaults={"plan": plan, "start_date": start_date, "end_date": end_date}
         )
-        return redirect('subscription')  # reload page
+        return redirect('subscription_view')
 
     return render(request, 'subscription.html', {
         'plans': plans,
         'current_subscription': current_subscription
     })
+
+
+# -------------------------------
+# Profile
+# -------------------------------
 
 @login_required
 def profile_view(request):
@@ -356,23 +314,9 @@ def profile_view(request):
     })
 
 
-from django.contrib.auth.models import User
-from django.contrib.auth.tokens import default_token_generator
-from django.core.mail import send_mail
-from django.shortcuts import render, redirect
-from django.urls import reverse
-from django.utils.http import urlsafe_base64_encode
-from django.utils.encoding import force_bytes
-from django.conf import settings
-
-from django.contrib.auth.models import User
-from django.contrib.auth.tokens import default_token_generator
-from django.utils.http import urlsafe_base64_encode
-from django.utils.encoding import force_bytes
-from django.shortcuts import render
-from django.urls import reverse
-from django.conf import settings
-import resend
+# -------------------------------
+# Password Reset
+# -------------------------------
 
 def password_reset_view(request):
     msg = ""
@@ -382,26 +326,19 @@ def password_reset_view(request):
         email = request.POST.get("email")
 
         if not email:
-            msg = "Email is required."
-            alert_type = "danger"
+            msg, alert_type = "Email is required.", "danger"
         else:
             users = User.objects.filter(email=email)
             if not users.exists():
-                msg = "No account found with that email."
-                alert_type = "danger"
+                msg, alert_type = "No account found with that email.", "danger"
             else:
                 for user in users:
                     uid = urlsafe_base64_encode(force_bytes(user.pk))
                     token = default_token_generator.make_token(user)
-
                     reset_url = request.build_absolute_uri(
-                        reverse("password_reset_confirm", kwargs={
-                            "uidb64": uid,
-                            "token": token,
-                        })
+                        reverse("password_reset_confirm", kwargs={"uidb64": uid, "token": token})
                     )
 
-                    # Send email via Resend
                     resend.api_key = settings.RESEND_API_KEY
                     try:
                         resend.Emails.send({
@@ -409,36 +346,17 @@ def password_reset_view(request):
                             "to": [user.email],
                             "subject": "Password Reset",
                             "html": f"<p>Hello {user.username},</p>"
-                                    f"<p>Click here to reset your password: "
-                                    f"<a href='{reset_url}'>Reset Password</a></p>"
+                                    f"<p>Reset here: <a href='{reset_url}'>Reset Password</a></p>"
                         })
                     except Exception as e:
                         print(f"Failed to send password reset email: {e}")
-                        msg = "Failed to send email. Please try again later."
-                        alert_type = "danger"
+                        msg, alert_type = "Failed to send email.", "danger"
                         return render(request, "password_reset_form.html", {"msg": msg, "alert_type": alert_type})
 
-                msg = "A password reset link has been sent to your email."
-                alert_type = "success"
+                msg, alert_type = "A password reset link has been sent to your email.", "success"
 
-    return render(request, "password_reset_form.html", {
-        "msg": msg,
-        "alert_type": alert_type,
-    })
+    return render(request, "password_reset_form.html", {"msg": msg, "alert_type": alert_type})
 
-
-
-
-from django.template import TemplateDoesNotExist
-from django.shortcuts import render, redirect
-from django.contrib.auth.models import User
-from django.contrib.auth.tokens import default_token_generator
-from django.utils.http import urlsafe_base64_decode
-from django.contrib.auth.hashers import make_password
-
-from django.contrib import messages
-from django.template import TemplateDoesNotExist
-from django.shortcuts import render, redirect
 
 def password_reset_confirm_view(request, uidb64, token):
     try:
@@ -457,40 +375,18 @@ def password_reset_confirm_view(request, uidb64, token):
     if request.method == "POST":
         new_password = request.POST.get("password")
         confirm_password = request.POST.get("password2")
-
         if not new_password or not confirm_password:
-            try:
-                return render(request, "password_reset_confirm.html", {
-                    "error": "Both fields are required.",
-                })
-            except TemplateDoesNotExist:
-                messages.error(request, "Something went wrong. Please try again.")
-                return redirect("/")
-
+            return render(request, "password_reset_confirm.html", {"error": "Both fields are required."})
         if new_password != confirm_password:
-            try:
-                return render(request, "password_reset_confirm.html", {
-                    "error": "Passwords do not match.",
-                })
-            except TemplateDoesNotExist:
-                messages.error(request, "Something went wrong. Please try again.")
-                return redirect("/")
+            return render(request, "password_reset_confirm.html", {"error": "Passwords do not match."})
 
-        # Save new password
         user.password = make_password(new_password)
         user.save()
-
         messages.success(request, "Password reset successfully!")
         return redirect("/reset/done/")
 
-    try:
-        return render(request, "password_reset_confirm.html")
-    except TemplateDoesNotExist:
-        messages.error(request, "Something went wrong. Please try again.")
-        return redirect("/")
+    return render(request, "password_reset_confirm.html")
 
 
 def password_reset_complete_view(request):
-    return render(request, 'password_reset_complete.html', {
-        "message": "Your password has been reset successfully."
-    })
+    return render(request, 'password_reset_complete.html', {"message": "Your password has been reset successfully."})

@@ -11,7 +11,6 @@ from decouple import config
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # --- Security ---
-SECRET_KEY = 'django-insecure-ryx24en-yc*brfyg3706a5ua_8-whhx7_il@7jn-ut$6o%$jyd'
 DEBUG = True
 ALLOWED_HOSTS = ['*']
 
@@ -110,8 +109,6 @@ EMAIL_HOST_PASSWORD = ''     # see step 2 below
 SESSION_COOKIE_AGE = 1209600         # 2 weeks in seconds
 SESSION_EXPIRE_AT_BROWSER_CLOSE = False
 
-STRIPE_PUBLIC_KEY = "pk_test_51STj0UR88LgsvGgGrYAJAxcMq6o25xTmIMAOI1Bx1cjefq4QErP4u0e9EuEfqWIHxKABFEf0qMyzkjjYL21FzIzH009zZjysujD"
-STRIPE_SECRET_KEY = "sk_test_51STj0UR88LgsvGgGYbx5HCkmgABpOYa16kgm2K6Nnll1Py3T36XLHyZEK97M6pWnlUDIGtdeCv298UqAw49kJFji00k0pXKVb5"
 
 
 # Static files (CSS, JavaScript, Images)
