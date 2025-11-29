@@ -220,6 +220,7 @@ def register_view(request):
             })
         except Exception as e:
             print(f"Activation email failed: {e}")
+            user.delete()
             return render(request, 'register.html', {'error': 'Could not send activation email. Please try again.'})
 
 
