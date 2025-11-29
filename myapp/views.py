@@ -30,18 +30,22 @@ stripe.api_key = settings.STRIPE_SECRET_KEY
 # -------------------------------
 
 def can_subscribe(user, plan_id):
+    """
+    Returns True if the user can subscribe to the given plan_id.
+    Prevents subscribing again to the same active plan.
+    """
     subscription = getattr(user, 'usersubscription', None)
+
     if not subscription:
-        return True  # No subscription yet
+        return True  # No subscription yet, user can subscribe
 
     today = timezone.now().date()
-    if subscription.start_date <= today <= subscription.end_date:
-        return False  # Active subscription exists
 
-    if subscription.plan_id == plan_id:
-        return False  # Already on this plan
+    if subscription.plan_id == plan_id and subscription.start_date <= today <= subscription.end_date:
+        return False  # User already has this active plan
 
-    return True
+    return True  # Either different plan or current plan expired
+
 
 
 @login_required
