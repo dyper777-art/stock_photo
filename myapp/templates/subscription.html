@@ -1,0 +1,77 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block subscription_active %} active {% endblock %}
+
+{% block content %}
+
+<!-- subscriptionPlans Section -->
+<section class="featured spad">
+    <div class="container">
+
+        <!-- Title -->
+        <div class="row">
+            <div class="col-lg-12 text-center">
+                <div class="section-title">
+                    <h2>subscriptionPlans</h2>
+                </div>
+            </div>
+        </div>
+
+        <!-- Plans -->
+        <div class="row justify-content-center">
+
+            {% for plan in plans %}
+                {% if plan.name != 'Free' %}
+                <div class="col-lg-3 col-md-4 col-sm-6 mb-4 d-flex justify-content-center">
+                    <div class="featured__item" style="width: 100%; max-width: 280px;">
+
+                        <!-- Plan Box Image -->
+                        <div class="featured__item__pic set-bg" 
+                             data-setbg="{% static 'myapp/img/plan-bg.jpg' %}">
+                            <ul class="featured__item__pic__hover">
+                                <li><a><i class="fa fa-star"></i></a></li>
+                                <li><a><i class="fa fa-credit-card"></i></a></li>
+                            </ul>
+                        </div>
+
+                        <!-- Plan Details -->
+                        <div class="featured__item__text text-center mt-3">
+
+                            <!-- Plan Name -->
+                            <h6>{{ plan.name }}</h6>
+
+                            <!-- Price -->
+                            <h5>${{ plan.price }} / month</h5>
+
+                            <!-- Download Limit -->
+                            <p class="mt-2">
+                                <strong>{{ plan.daily_limit }}</strong> Downloads Per Day
+                            </p>
+
+                            <!-- Subscribe Button -->
+                            <form method="POST" action="{% url 'create_checkout' plan.id %}" class="mt-3">
+                                {% csrf_token %}
+                                <button type="submit" class="btn custom-btn w-100"
+                                    {% if current_subscription and current_subscription.plan.id == plan.id %}
+                                        disabled
+                                {% endif %}>
+                                    {% if current_subscription and current_subscription.plan.id == plan.id %}
+                                        Current Plan
+                                    {% else %}
+                                        Subscribe
+                                    {% endif %}
+                                </button>
+                            </form>
+
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            {% endfor %}
+
+        </div>
+    </div>
+</section>
+
+{% endblock %}

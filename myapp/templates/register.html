@@ -1,0 +1,95 @@
+{% extends 'base2.html' %}
+
+{% block content %}
+
+<section class="contact-section section-padding pt-0">
+    <div class="container">
+        <div class="row">
+
+            <div class="col-lg-8 col-12 mx-auto">
+
+                <!-- Title -->
+                <div class="section-title-wrap mb-5 text-center">
+                    <h1>Register</h1>
+                </div>
+
+                <!-- Error Message -->
+                {% if error %}
+                    <p class="text-danger text-center">{{ error }}</p>
+                {% endif %}
+
+                <!-- Register Form -->
+                <form method="post" class="custom-form contact-form" role="form">
+                    {% csrf_token %}
+
+                    <div class="row">
+
+                        <!-- Username -->
+                        <div class="col-lg-12 col-12 mb-3">
+                            <input 
+                                type="text"
+                                name="username"
+                                id="username"
+                                class="form-control"
+                                placeholder="Username"
+                                required>
+                        </div>
+
+                        <!-- Email -->
+                        <div class="col-lg-12 col-12 mb-3">
+                            <input 
+                                type="email"
+                                name="email"
+                                id="email"
+                                class="form-control"
+                                placeholder="Email"
+                                required>
+                        </div>
+
+                        <!-- Password -->
+                        <div class="col-lg-12 col-12 mb-3">
+                            <input 
+                                type="password"
+                                name="password"
+                                id="password"
+                                class="form-control"
+                                placeholder="Password"
+                                required>
+                        </div>
+
+                        <!-- Confirm Password -->
+                        <div class="col-lg-12 col-12 mb-4">
+                            <input 
+                                type="password"
+                                name="password2"
+                                id="password2"
+                                class="form-control"
+                                placeholder="Confirm Password"
+                                required>
+                        </div>
+
+                        <!-- Submit -->
+                        <div class="col-lg-4 col-12 ms-auto">
+                            <button type="submit" class="form-control btn btn-primary">
+                                Register
+                            </button>
+                        </div>
+
+                        <!-- Login Link -->
+                        <div class="col-12 mt-4 text-center">
+                            <p>
+                                Already have an account?
+                                <a href="{% url 'login' %}" class="text-primary">Login here</a>
+                            </p>
+                        </div>
+
+                    </div>
+                </form>
+
+            </div>
+
+        </div>
+    </div>
+</section>
+
+{% endblock %}

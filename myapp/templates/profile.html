@@ -1,0 +1,51 @@
+{% extends 'base2.html' %}
+
+{% block content %}
+
+<section class="contact-section section-padding pt-0">
+    <div class="container">
+        <div class="row justify-content-center">
+
+            <div class="col-lg-8">
+
+                <!-- Section Title -->
+                <div class="section-title-wrap mb-5 text-center">
+                    <h1>Profile</h1>
+                </div>
+
+                <!-- Profile Card -->
+                <div class="card shadow-sm p-4 mb-4">
+                    <h4 class="mb-3"><strong>Username:</strong> {{ user.username }}</h4>
+                    <h4 class="mb-3"><strong>Email:</strong> {{ user.email }}</h4>
+
+                    {% if subscription %}
+                        <h4 class="mb-3"><strong>Subscription:</strong> {{ subscription.plan.name }}</h4>
+                        <h4 class="mb-3"><strong>Start Date:</strong> {{ subscription.start_date }}</h4>
+                        <h4 class="mb-3"><strong>End Date:</strong> {{ subscription.end_date }}</h4>
+                        <h4 class="mb-0">
+                            <strong>Daily Limit:</strong> {{ downloads_today }}/{{ subscription.plan.daily_limit }}
+                        </h4>
+                    {% else %}
+                        <h4 class="mb-3"><strong>Subscription:</strong> None</h4>
+                        <h4 class="mb-0">
+                            <strong>Daily Limit:</strong> 0/0
+                        </h4>
+                    {% endif %}
+                </div>
+
+                <!-- Logout Button -->
+                <div class="text-center">
+                    <form method="GET" action="{% url 'logout' %}" class="d-inline-block w-50">
+                        <button type="submit" class="btn btn-danger w-100 py-2">
+                            Logout
+                        </button>
+                    </form>
+                </div>
+
+            </div>
+
+        </div>
+    </div>
+</section>
+
+{% endblock %}

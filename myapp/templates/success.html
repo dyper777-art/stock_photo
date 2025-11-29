@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+
+{% block content %}
+
+<section class="contact-section section-padding pt-0">
+    <div class="container">
+        <div class="row justify-content-center">
+
+            <div class="col-lg-8 col-12 text-center">
+
+                <!-- Title -->
+                <div class="section-title-wrap mb-5">
+                    <h1 class="text-success">Payment Successful</h1>
+                </div>
+
+                <!-- Message -->
+                <p class="mb-4">Your subscription has been activated successfully.</p>
+
+                <!-- Button -->
+                <a href="{% url 'home' %}" class="btn custom-btn smoothscroll mt-3">
+                    Go to Home
+                </a>
+
+            </div>
+
+        </div>
+    </div>
+</section>
+
+{% endblock %}

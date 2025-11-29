@@ -1,0 +1,82 @@
+{% extends 'base.html' %}
+{% load static %}  {# <-- Add this line at the top #}
+
+{% block home_active %} active {% endblock %}
+
+{% block content %}
+
+<!-- Featured Section Begin -->
+<section class="featured spad">
+    <div class="container">
+
+        <div class="row">
+            <div class="col-lg-12">
+                <div class="section-title">
+                    <h2>Featured Products</h2>
+                </div>
+
+                <!-- Category filters -->
+                <div class="featured__controls">
+                    <ul>
+                        <li class="active" data-filter="*">All</li>
+                        <li data-filter=".basic">Basic</li>
+                        <li data-filter=".pro">Pro</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="row featured__filter">
+            {% for product in products %}
+            {% with plan_name=product.subscription_plan.name %}
+            <div class="col-lg-3 col-md-4 col-sm-6 mix 
+                {% if plan_name == 'Pro' %}pro{% elif plan_name == 'Basic' %}basic{% endif %}">
+
+                <div class="featured__item">
+
+                    <!-- IMAGE -->
+                    {% if product.image %}
+                        <div class="featured__item__pic set-bg" data-setbg="{{ product.image.url }}">
+                    {% else %}
+                        <div class="featured__item__pic set-bg" data-setbg="{% static 'images/default.png' %}">
+                    {% endif %}
+                        <ul class="featured__item__pic__hover">
+                            <li>
+                                <i class="bi bi-headphones"
+                                   {% if plan_name == 'Pro' %}style="color:#ff8800;"
+                                   {% elif plan_name == 'Basic' %}style="color:#4d9aff;"
+                                   {% endif %}></i>
+                            </li>
+
+                            <li>
+                                <a href="{% url 'download_product' product.id %}">
+                                    <i class="fa fa-arrow-down"></i>
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+
+                    <!-- TEXT -->
+                    <div class="featured__item__text">
+                        <h6><a>{{ product.name }}</a></h6>
+                        <h5>
+                            <span
+                                {% if plan_name == 'Pro' %}style="color:#ff8800;"
+                                {% elif plan_name == 'Basic' %}style="color:#4d9aff;"
+                                {% endif %}>
+                                {{ plan_name }}
+                            </span>
+                        </h5>
+                    </div>
+
+                </div>
+            </div>
+            {% endwith %}
+            {% endfor %}
+        </div>
+
+    </div>
+</section>
+<!-- Featured Section End -->
+
+{% endblock %}
